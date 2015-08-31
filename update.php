@@ -13,6 +13,7 @@ class MotoShopAssigner{
 	private $_template = array();
 	private $_options = array();
 	public function __construct($config = array()) {
+
 		$this->_options = array_merge($this->_defaults, $config);
 		//$this->_checkTable();
 		$prefix = Database::instance()->table_prefix();
@@ -33,56 +34,6 @@ query;
 
 		$this->templates = $this->findAllLocalTemplates();
 
-
-// 		$query_categories = <<<query
-//         SELECT
-//             id,url_name
-//         FROM
-//            `{$prefix}templatecategories`
-//         WHERE
-//            `{$prefix}templatecategories`.`visibility` = 1
-       
-// query;
-
-// 		$categories = Database::instance()->query($query_categories)->as_array(false);
-
-// 		foreach ($categories as $category) {		
-// 			$this->_addCategory($category);	
-// 		}
-
-// 		$templates = ORM::factory('template')->
-// 			where('disabled', 0)->
-// 			where('id >', 25505)->
-// 			notin('id', $ids)->
-// 			orderby('inserted_date', 'desc')->
-// 			find_all();
-// 		foreach ($templates as $template) {
-// 			$this->checkTemplate($template);
-
-// $query_cat_templ_rel = <<<query
-//         SELECT
-//             template_id, templatecategory_id
-//         FROM
-//            `{$prefix}templatecategories_templates`
-//         WHERE
-//            `{$prefix}templatecategories_templates`.`template_id` = $template->id
-       
-// query;
-
-// 		$templates_categories = Database::instance()->query($query_cat_templ_rel)->as_array(false);
-
-// 		foreach ($templates_categories as $relation) {		
-
-			
-// 			$this->_addCategoriesAssign($relation);	
-// 		}
-
-
-// 		}
-
-
-		
-
 	}
 
 
@@ -92,7 +43,7 @@ query;
 	    }
 	    $ch = curl_init();
 	    curl_setopt($ch, CURLOPT_URL, $Url);
-	    // curl_setopt($ch, CURLOPT_PROXY, '192.168.5.111:3128');
+	    curl_setopt($ch, CURLOPT_PROXY, '192.168.5.111:3128');
 	    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 	    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -113,9 +64,10 @@ query;
 
 
 	public function parseXML($xml){
-		$array=simplexml_load_string($xml);
-		return $array;
+		$SXE = new SimpleXMLElement($xml);
+		return $SXE;
 	}
+
 	public function getTemplateInfo($templateId){
 		$url = $this->_options['webapiurl'];
 		$user = 'flashmoto';
@@ -143,9 +95,8 @@ query;
 			$properties[] = $prop[0];
 		}
 		return $properties;
-
-
 	}
+
 	public function getScreenshots($SXE){
 	$screenshots = array();
 	$xpath = '/templates/template/screenshots_list/screenshot/uri';
@@ -169,7 +120,7 @@ query;
 		
 	}
 	
-	public function findAllLocalTemplates() {
+	private function findAllLocalTemplates() {
 		$templates = ORM::factory('template')->
 			where('id >', 25505)->
 			notin('id', $this->ids)->
@@ -179,9 +130,10 @@ query;
 	}
 
 	public function updatePrice() {
+		echo "updating price...\n";
 		foreach ($this->templates as $template) {
+			echo  $template->id . "\n";
 			$templ = $this->getTemplateInfo($template->id);
-			// echo $templ;
 			if ($templ !== 'false') {
 				$templ = $this->parseXML($templ);
 				
@@ -193,29 +145,30 @@ query;
 	}
 
 	public function updateDeleted() {
+		echo "updating deleted...\n";
 		foreach ($this->templates as $template) {
+			echo  $template->id . "\n";
 			$templ = $this->getTemplateInfo($template->id);
-			// echo $templ;
 			if ($templ == 'false') {
 				$this->changeDisabledField($template->id);
 			}
 		}
 	}
 
-	public function changeDisabledField($templateId) {
+	private function changeDisabledField($templateId) {
 		$template = ORM::factory('template', $templateId);
 		$template->disabled = 1;
 		$template->save();
 	}
 
-	public function checkForPrice($LocalTemplate, $WebSitetemplate) {
+	private function checkForPrice($LocalTemplate, $WebSitetemplate) {
 		if($LocalTemplate->price != $WebSitetemplate->template->price) {
 			return false;
 		}
 		return true;
 	}
 
-	public function changePrice($templateId, $price) {
+	private function changePrice($templateId, $price) {
 		$template = ORM::factory('template', $templateId);
 		$template->price = $price;
 		$template->save();
@@ -351,6 +304,7 @@ function autostart ()
 	// $updater->run ();
 	$assigner = new MotoShopAssigner();
 	$assigner->updatePrice();
+	$assigner->updateDeleted();
 }
 set_time_limit (0);
 $autostart = 'autostart';
