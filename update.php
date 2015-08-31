@@ -1,6 +1,8 @@
 <?php
 define ('UPDATE_SCRIPT', true);
 class MotoShopAssigner{
+	private $ids;
+	private $templates;
 	private $_defaults = array(
 		'webapiurl' 	=> 'http://api.templatemonster.com/webapi/template_xml.php',
         'moto_db_name' => 'motoshop',
@@ -27,54 +29,56 @@ query;
 
 		$results = Database::instance()->query($query)->as_array(false);
 		$results[]= 50900;
-		$ids = array_map(create_function('$item', 'return $item["template_id"];'), $results);
+		$this->ids = array_map(create_function('$item', 'return $item["template_id"];'), $results);
+
+		$this->templates = $this->findAllLocalTemplates();
 
 
-		$query_categories = <<<query
-        SELECT
-            id,url_name
-        FROM
-           `{$prefix}templatecategories`
-        WHERE
-           `{$prefix}templatecategories`.`visibility` = 1
+// 		$query_categories = <<<query
+//         SELECT
+//             id,url_name
+//         FROM
+//            `{$prefix}templatecategories`
+//         WHERE
+//            `{$prefix}templatecategories`.`visibility` = 1
        
-query;
+// query;
 
-		$categories = Database::instance()->query($query_categories)->as_array(false);
+// 		$categories = Database::instance()->query($query_categories)->as_array(false);
 
-		foreach ($categories as $category) {		
-			$this->_addCategory($category);	
-		}
+// 		foreach ($categories as $category) {		
+// 			$this->_addCategory($category);	
+// 		}
 
-		$templates = ORM::factory('template')->
-			where('disabled', 0)->
-			where('id >', 25505)->
-			notin('id', $ids)->
-			orderby('inserted_date', 'desc')->
-			find_all();
-		foreach ($templates as $template) {
-			$this->checkTemplate($template);
+// 		$templates = ORM::factory('template')->
+// 			where('disabled', 0)->
+// 			where('id >', 25505)->
+// 			notin('id', $ids)->
+// 			orderby('inserted_date', 'desc')->
+// 			find_all();
+// 		foreach ($templates as $template) {
+// 			$this->checkTemplate($template);
 
-$query_cat_templ_rel = <<<query
-        SELECT
-            template_id, templatecategory_id
-        FROM
-           `{$prefix}templatecategories_templates`
-        WHERE
-           `{$prefix}templatecategories_templates`.`template_id` = $template->id
+// $query_cat_templ_rel = <<<query
+//         SELECT
+//             template_id, templatecategory_id
+//         FROM
+//            `{$prefix}templatecategories_templates`
+//         WHERE
+//            `{$prefix}templatecategories_templates`.`template_id` = $template->id
        
-query;
+// query;
 
-		$templates_categories = Database::instance()->query($query_cat_templ_rel)->as_array(false);
+// 		$templates_categories = Database::instance()->query($query_cat_templ_rel)->as_array(false);
 
-		foreach ($templates_categories as $relation) {		
+// 		foreach ($templates_categories as $relation) {		
 
 			
-			$this->_addCategoriesAssign($relation);	
-		}
+// 			$this->_addCategoriesAssign($relation);	
+// 		}
 
 
-		}
+// 		}
 
 
 		
@@ -88,7 +92,7 @@ query;
 	    }
 	    $ch = curl_init();
 	    curl_setopt($ch, CURLOPT_URL, $Url);
-	    curl_setopt($ch, CURLOPT_PROXY, '192.168.5.111:3128');
+	    // curl_setopt($ch, CURLOPT_PROXY, '192.168.5.111:3128');
 	    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 	    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -154,30 +158,56 @@ query;
 	}
 
 	public function checkTemplate($template){	
-			// $this->_template['id'] = $template->id;
-			// $this->_template['name'] = $template->id;
-			// $this->_template['type_id'] = $template->templatetype_id;
-			// $this->_template['visible'] = !($template->disabled);
-			// $this->_template['price'] = $template->price;
-			// $this->_template['date_added'] = $template->inserted_date;
-			// $this->_template['description'] = 0;
-			$templ = $this->getTemplateInfo($template->id);
-			//$this->parseXML($this->getTemplateInfo($template->id))->template->price;
-			if ($templ !== 'false') {
-				$templ = $this->parseXML($templ);
-				echo $templ->template->id;
-				if (!$this->checkForPrice($template, $templ)) {
-					$this->changePrice($template->id, $templ->template->price);
-				}
-				// echo $this->parseXML($templ)->template->id;
-				
-			} else {
-				$this->changeVisibility($template->id);
-			}
-			// $this->_addTemplate();		
+			$this->_template['id'] = $template->id;
+			$this->_template['name'] = $template->id;
+			$this->_template['type_id'] = $template->templatetype_id;
+			$this->_template['visible'] = !($template->disabled);
+			$this->_template['price'] = $template->price;
+			$this->_template['date_added'] = $template->inserted_date;
+			$this->_template['description'] = 0;
+			$this->_addTemplate();		
 		
 	}
 	
+	public function findAllLocalTemplates() {
+		$templates = ORM::factory('template')->
+			where('id >', 25505)->
+			notin('id', $this->ids)->
+			orderby('inserted_date', 'desc')->
+			find_all();
+		return $templates;
+	}
+
+	public function updatePrice() {
+		foreach ($this->templates as $template) {
+			$templ = $this->getTemplateInfo($template->id);
+			// echo $templ;
+			if ($templ !== 'false') {
+				$templ = $this->parseXML($templ);
+				
+				if (!$this->checkForPrice($template, $templ)) {
+					$this->changePrice($template->id, $templ->template->price);
+				}
+			}
+		}
+	}
+
+	public function updateDeleted() {
+		foreach ($this->templates as $template) {
+			$templ = $this->getTemplateInfo($template->id);
+			// echo $templ;
+			if ($templ == 'false') {
+				$this->changeDisabledField($template->id);
+			}
+		}
+	}
+
+	public function changeDisabledField($templateId) {
+		$template = ORM::factory('template', $templateId);
+		$template->disabled = 1;
+		$template->save();
+	}
+
 	public function checkForPrice($LocalTemplate, $WebSitetemplate) {
 		if($LocalTemplate->price != $WebSitetemplate->template->price) {
 			return false;
@@ -189,20 +219,6 @@ query;
 		$template = ORM::factory('template', $templateId);
 		$template->price = $price;
 		$template->save();
-	}
-
-	public function changeVisibility($templateId) {
-		$query_set_visibility = <<<query
-        UPDATE
-            templates
-        SET
-           disabled = 1
-        WHERE
-           `id` = $templateId
-       
-query;
-
-		Database::instance()->query($query_set_visibility);
 	}
 
 	public static function assignTemplateToCategory ($tid)
@@ -334,6 +350,7 @@ function autostart ()
 	$updater = new Shell_Setup_Update ();
 	// $updater->run ();
 	$assigner = new MotoShopAssigner();
+	$assigner->updatePrice();
 }
 set_time_limit (0);
 $autostart = 'autostart';
