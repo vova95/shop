@@ -5,6 +5,7 @@ class MotoShopAssigner{
 	private $templates;
 	private $_defaults = array(
 		'webapiurl' 	=> 'http://api.templatemonster.com/webapi/template_xml.php',
+		'webapiupdateurl' => 'http://www.templatemonster.com/webapi/template_updates.php',
         'moto_db_name' => 'motoshop',
         'moto_db_login' => 'root',
         'moto_db_pass' => '',
@@ -32,15 +33,49 @@ query;
 		$results[]= 50900;
 		$this->ids = array_map(create_function('$item', 'return $item["template_id"];'), $results);
 
-		$this->templates = $this->findAllLocalTemplates();
+		// $this->templates = $this->findAllLocalTemplates();
+		echo $this->parseXML($this->getUpdatesFromWebSite());
+		exit();
 
 	}
 
+	public function getUpdatesFromWebSite() {
+		$date = date('Y-m-d%H:i:s');
+		//2015-08-01%2022:00:00
+		$url = $this->_options['webapiupdateurl'];
+		$user = 'flashmoto';
+		$pass =  'd44b22acc1b53e905ff4e7ec389acea2';
+		$webapiUrl = $url . '?login=' . $user .  '&webapipassword=' . $pass . '&from=' . '2015-08-31%2012:00:00' . '&to=' . '2015-08-31%2020:00:00';
+		return $this->url_get_contents($webapiUrl);
+	}
+
+
+	public function addUpdatedTemplate($template) {
+		$query = <<<query
+        INSERT INTO `templates`
+            (
+                id,name,price,date_added,visible,type_id,description,type_label, meta_description
+            )
+        VALUES 
+        	(
+        		$template->id, $template->id, $template->inserted_date, $template->state, $template->template_type,
+        		'0', 'flash', '0', '0'
+        	)
+          ON DUPLICATE KEY UPDATE
+            price=$template->price,
+            visible=$template->state
+       
+query;
+
+		$results = Database::instance()->query($query)->as_array(false);
+	}
 
 	public function url_get_contents ($Url) {
+
 	    if (!function_exists('curl_init')){ 
 	        die('CURL is not installed!');
 	    }
+
 	    $ch = curl_init();
 	    curl_setopt($ch, CURLOPT_URL, $Url);
 	    curl_setopt($ch, CURLOPT_PROXY, '192.168.5.111:3128');
@@ -49,6 +84,7 @@ query;
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 	    $output = curl_exec($ch);
 	    curl_close($ch);
+	    
 	    return $output;
 	}
 
@@ -64,8 +100,8 @@ query;
 
 
 	public function parseXML($xml){
-		$SXE = new SimpleXMLElement($xml);
-		return $SXE;
+		$array = json_decode(json_encode((array)simplexml_load_string($xml)),1);
+		return $array;
 	}
 
 	public function getTemplateInfo($templateId){
