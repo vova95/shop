@@ -34,19 +34,13 @@ query;
 		$this->ids = array_map(create_function('$item', 'return $item["template_id"];'), $results);
 
 		// $this->templates = $this->findAllLocalTemplates();
-		echo $this->parseXML($this->getUpdatesFromWebSite());
-		exit();
 
 	}
 
-	public function getUpdatesFromWebSite() {
-		$date = date('Y-m-d%H:i:s');
-		//2015-08-01%2022:00:00
-		$url = $this->_options['webapiupdateurl'];
-		$user = 'flashmoto';
-		$pass =  'd44b22acc1b53e905ff4e7ec389acea2';
-		$webapiUrl = $url . '?login=' . $user .  '&webapipassword=' . $pass . '&from=' . '2015-08-31%2012:00:00' . '&to=' . '2015-08-31%2020:00:00';
-		return $this->url_get_contents($webapiUrl);
+	public function getTemplatesFromWebSite() {
+		$templatesPath = file_get_contents('./data/tmp/templates.json');
+
+		var_dump(json_decode($templatesPath, true));
 	}
 
 
@@ -334,13 +328,12 @@ query;
 function autostart ()
 {
 	error_reporting (E_ALL);
-	ini_set ('memory_limit', '256M');
+	ini_set ('memory_limit', '400M');
 	Zend_Registry::getInstance ()->Environment = new Environment_CommandLine ();
 	$updater = new Shell_Setup_Update ();
 	// $updater->run ();
 	$assigner = new MotoShopAssigner();
-	$assigner->updatePrice();
-	$assigner->updateDeleted();
+	$assigner->getTemplatesFromWebSite();
 }
 set_time_limit (0);
 $autostart = 'autostart';
