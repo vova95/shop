@@ -35,33 +35,106 @@ query;
 
 		// $this->templates = $this->findAllLocalTemplates();
 
+
+
+		$templates = ORM::factory('template')->
+        // where('disabled', self::DISABLED_TEMPLATE)->
+        // where('id >', self::MOTO_MIN_ID)->
+        notin('id', $this->ids)->
+        in('templatetype_id', array(63, 81) )->
+        orderby('inserted_date', 'desc')->
+        find_all();
+        echo count ($templates);
+        foreach ($templates as $template) {
+        	// echo $template->id;
+            $this->addUpdatedTemplateToDatabase($template);
+        }
 	}
 
-	public function getTemplatesFromWebSite() {
-		$templatesPath = file_get_contents('./data/tmp/templates.json');
 
-		var_dump(json_decode($templatesPath, true));
+	public function updateTemplates() {
+		$templates = $this->readTemplates();
+
+		foreach ($templates as $template) {
+			$template = explode('=', $template);
+			$template[2] = json_decode($template[2], true);
+			if ($this->checkForType($template[2]['type_id'])) {
+				$this->addUpdatedTemplateToDatabase($template);
+			}
+				
+			
+		}
+
 	}
 
 
-	public function addUpdatedTemplate($template) {
+	public function checkForType($type) {
+		$motoTypes = array(
+			'motoCMS' => '36',
+			'motoFlash' => '19'
+			);
+
+		if (in_array($type, $motoTypes)) {
+			return true;
+		}
+		return false;
+	}
+
+	public function readTemplates() {
+		$templatesPath = './data/tmp/templates.json';
+
+		$handle = fopen($templatesPath, "r");
+
+		if (!$handle) {
+		    echo "Couldn't open file!";
+		    return;
+		} 
+
+	    while (($line = fgets($handle)) !== false) {
+	        $templatesInfo[] = $line;
+	    }
+
+	    fclose($handle);
+	    return $templatesInfo;
+	}
+
+	public function getConnectionToDBmotoshop(){
+        $dbhost = $this->_options['moto_db_host'];
+        $dbuser = $this->_options['moto_db_login'];
+        $dbpass = $this->_options['moto_db_pass'];
+        $dbname = $this->_options['moto_db_name'];
+
+        $link = mysqli_connect(
+            $dbhost,  
+            $dbuser,       
+            $dbpass,   
+            $dbname);     
+
+        return $link;
+    }
+
+	public function addUpdatedTemplateToDatabase($template) {
+		$db = $this->getConnectionToDBmotoshop();
 		$query = <<<query
         INSERT INTO `templates`
             (
-                id,name,price,date_added,visible,type_id,description,type_label, meta_description
+                id, name, price, date_added, visible, type_id, description, type_label, meta_description
             )
         VALUES 
         	(
-        		$template->id, $template->id, $template->inserted_date, $template->state, $template->template_type,
-        		'0', 'flash', '0', '0'
+        		$template->id, '$template->id', $template->price, '$template->inserted_date', $template->disabled, $template->templatetype_id, '0', 'flash', '0'
         	)
           ON DUPLICATE KEY UPDATE
             price=$template->price,
-            visible=$template->state
-       
+            visible=$template->disabled
 query;
+		// echo $query . "\n\n\n\n";
+		$stm = $db->query($query);
 
-		$results = Database::instance()->query($query)->as_array(false);
+		$result = mysqli_query($db, $query);
+
+		// var_dump( $result );
+		// $results = $stm->execute();
 	}
 
 	public function url_get_contents ($Url) {
@@ -328,12 +401,12 @@ query;
 function autostart ()
 {
 	error_reporting (E_ALL);
-	ini_set ('memory_limit', '400M');
+	ini_set ('memory_limit', '256M');
 	Zend_Registry::getInstance ()->Environment = new Environment_CommandLine ();
 	$updater = new Shell_Setup_Update ();
 	// $updater->run ();
 	$assigner = new MotoShopAssigner();
-	$assigner->getTemplatesFromWebSite();
+	// $assigner->updateTemplates();
 }
 set_time_limit (0);
 $autostart = 'autostart';
