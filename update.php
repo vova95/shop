@@ -44,7 +44,7 @@ query;
         in('templatetype_id', array(63, 81) )->
         orderby('inserted_date', 'desc')->
         find_all();
-        echo count ($templates);
+        // echo count ($templates);
         foreach ($templates as $template) {
         	// echo $template->id;
             $this->addUpdatedTemplateToDatabase($template);
@@ -114,24 +114,24 @@ query;
     }
 
 	public function addUpdatedTemplateToDatabase($template) {
-		$db = $this->getConnectionToDBmotoshop();
+		$db = $this->_getConnectionToShop();
+		$template->disabled = !$template->disabled;
 		$query = <<<query
         INSERT INTO `templates`
             (
-                id, name, price, date_added, visible, type_id, description, type_label, meta_description
+                id, name, price, date_added, visible, type_id, description, type_label, title, meta_description
             )
         VALUES 
         	(
-        		$template->id, '$template->id', $template->price, '$template->inserted_date', $template->disabled, $template->templatetype_id, '0', 'flash', '0'
+        		$template->id, '$template->id', $template->price, '$template->inserted_date', $template->disabled, $template->templatetype_id, '0', 'flash', '0', '0'
         	)
           ON DUPLICATE KEY UPDATE
             price=$template->price,
             visible=$template->disabled
 query;
 		// echo $query . "\n\n\n\n";
-		$stm = $db->query($query);
 
-		$result = mysqli_query($db, $query);
+		$result = $db->exec($query);
 
 		// var_dump( $result );
 		// $results = $stm->execute();
