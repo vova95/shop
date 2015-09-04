@@ -5,7 +5,6 @@ class MotoShopAssigner{
 	private $templates;
 	private $_defaults = array(
 		'webapiurl' 	=> 'http://api.templatemonster.com/webapi/template_xml.php',
-		'webapiupdateurl' => 'http://www.templatemonster.com/webapi/template_updates.php',
         'moto_db_name' => 'motoshop',
         'moto_db_login' => 'root',
         'moto_db_pass' => '',
@@ -13,10 +12,12 @@ class MotoShopAssigner{
 	);
 	private $_template = array();
 	private $_options = array();
+	private $motoTypes = array(63, 81);
+
 	public function __construct($config = array()) {
 
 		$this->_options = array_merge($this->_defaults, $config);
-		//$this->_checkTable();
+
 		$prefix = Database::instance()->table_prefix();
 
 		$query = <<<query
@@ -32,90 +33,30 @@ query;
 		$results = Database::instance()->query($query)->as_array(false);
 		$results[]= 50900;
 		$this->ids = array_map(create_function('$item', 'return $item["template_id"];'), $results);
+        
+	}
 
-		// $this->templates = $this->findAllLocalTemplates();
-
-
-
-		$templates = ORM::factory('template')->
-        // where('disabled', self::DISABLED_TEMPLATE)->
-        // where('id >', self::MOTO_MIN_ID)->
-        notin('id', $this->ids)->
-        in('templatetype_id', array(63, 81) )->
-        orderby('inserted_date', 'desc')->
-        find_all();
-        // echo count ($templates);
-        foreach ($templates as $template) {
-        	// echo $template->id;
+	public function updateMotoShopTemplates() {
+		$templates = $this->getAllTemplates();
+		foreach ($templates as $template) {
             $this->addUpdatedTemplateToDatabase($template);
         }
 	}
 
+	private function getAllTemplates() {
+		$templates = ORM::factory('template')->
+	        notin('id', $this->ids)->
+	        in('templatetype_id', $this->motoTypes)->
+	        orderby('inserted_date', 'desc')->
+	        find_all();
 
-	public function updateTemplates() {
-		$templates = $this->readTemplates();
-
-		foreach ($templates as $template) {
-			$template = explode('=', $template);
-			$template[2] = json_decode($template[2], true);
-			if ($this->checkForType($template[2]['type_id'])) {
-				$this->addUpdatedTemplateToDatabase($template);
-			}
-				
-			
-		}
-
+        return $templates;
 	}
-
-
-	public function checkForType($type) {
-		$motoTypes = array(
-			'motoCMS' => '36',
-			'motoFlash' => '19'
-			);
-
-		if (in_array($type, $motoTypes)) {
-			return true;
-		}
-		return false;
-	}
-
-	public function readTemplates() {
-		$templatesPath = './data/tmp/templates.json';
-
-		$handle = fopen($templatesPath, "r");
-
-		if (!$handle) {
-		    echo "Couldn't open file!";
-		    return;
-		} 
-
-	    while (($line = fgets($handle)) !== false) {
-	        $templatesInfo[] = $line;
-	    }
-
-	    fclose($handle);
-	    return $templatesInfo;
-	}
-
-	public function getConnectionToDBmotoshop(){
-        $dbhost = $this->_options['moto_db_host'];
-        $dbuser = $this->_options['moto_db_login'];
-        $dbpass = $this->_options['moto_db_pass'];
-        $dbname = $this->_options['moto_db_name'];
-
-        $link = mysqli_connect(
-            $dbhost,  
-            $dbuser,       
-            $dbpass,   
-            $dbname);     
-
-        return $link;
-    }
 
 	public function addUpdatedTemplateToDatabase($template) {
 		$db = $this->_getConnectionToShop();
 		$template->disabled = !$template->disabled;
+
 		$query = <<<query
         INSERT INTO `templates`
             (
@@ -129,12 +70,18 @@ query;
             price=$template->price,
             visible=$template->disabled
 query;
-		// echo $query . "\n\n\n\n";
 
 		$result = $db->exec($query);
+	}
 
-		// var_dump( $result );
-		// $results = $stm->execute();
+	private function _getConnectionToShop() {
+		$dbhost = $this->_options['moto_db_host'];
+		$dbuser = $this->_options['moto_db_login'];
+		$dbpass = $this->_options['moto_db_pass'];
+		$dbname = $this->_options['moto_db_name'];
+		$dbh = new PDO("mysql:host=$dbhost;dbname=$dbname", $dbuser, $dbpass);
+		$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		return $dbh;
 	}
 
 	public function url_get_contents ($Url) {
@@ -155,15 +102,7 @@ query;
 	    return $output;
 	}
 
-	private function _getConnectionToShop() {
-		$dbhost = $this->_options['moto_db_host'];
-		$dbuser = $this->_options['moto_db_login'];
-		$dbpass = $this->_options['moto_db_pass'];
-		$dbname = $this->_options['moto_db_name'];
-		$dbh = new PDO("mysql:host=$dbhost;dbname=$dbname", $dbuser, $dbpass);
-		$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-		return $dbh;
-	}
+	
 
 
 	public function parseXML($xml){
@@ -221,60 +160,6 @@ query;
 			$this->_template['description'] = 0;
 			$this->_addTemplate();		
 		
-	}
-	
-	private function findAllLocalTemplates() {
-		$templates = ORM::factory('template')->
-			where('id >', 25505)->
-			notin('id', $this->ids)->
-			orderby('inserted_date', 'desc')->
-			find_all();
-		return $templates;
-	}
-
-	public function updatePrice() {
-		echo "updating price...\n";
-		foreach ($this->templates as $template) {
-			echo  $template->id . "\n";
-			$templ = $this->getTemplateInfo($template->id);
-			if ($templ !== 'false') {
-				$templ = $this->parseXML($templ);
-				
-				if (!$this->checkForPrice($template, $templ)) {
-					$this->changePrice($template->id, $templ->template->price);
-				}
-			}
-		}
-	}
-
-	public function updateDeleted() {
-		echo "updating deleted...\n";
-		foreach ($this->templates as $template) {
-			echo  $template->id . "\n";
-			$templ = $this->getTemplateInfo($template->id);
-			if ($templ == 'false') {
-				$this->changeDisabledField($template->id);
-			}
-		}
-	}
-
-	private function changeDisabledField($templateId) {
-		$template = ORM::factory('template', $templateId);
-		$template->disabled = 1;
-		$template->save();
-	}
-
-	private function checkForPrice($LocalTemplate, $WebSitetemplate) {
-		if($LocalTemplate->price != $WebSitetemplate->template->price) {
-			return false;
-		}
-		return true;
-	}
-
-	private function changePrice($templateId, $price) {
-		$template = ORM::factory('template', $templateId);
-		$template->price = $price;
-		$template->save();
 	}
 
 	public static function assignTemplateToCategory ($tid)
@@ -406,7 +291,7 @@ function autostart ()
 	$updater = new Shell_Setup_Update ();
 	// $updater->run ();
 	$assigner = new MotoShopAssigner();
-	// $assigner->updateTemplates();
+	$assigner->updateMotoShopTemplates();
 }
 set_time_limit (0);
 $autostart = 'autostart';
